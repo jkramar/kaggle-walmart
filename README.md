@@ -47,7 +47,7 @@ I then tried XGBoost, which did even better with the same feature matrix, after 
 
 ######Neural nets
 
-I only implemented neural nets during the last week or so, partly because of software configuration issues. (Hello, CUDA.) Because I'm pretty familiar with the Python toolset, I decided to use one of the Theano-based libraries; Lasagne was the one whose philosophy seemed most appealing. (It's apparently a much thinner wrapper around Theano than things like Keras or Blocks.)
+I only implemented neural nets during the last week or so, partly because of software configuration issues. (Hello, CUDA.) Because I'm pretty familiar with the Python toolset, I decided to use one of the Theano-based libraries; [Lasagne](https://github.com/Lasagne/Lasagne) was the one whose philosophy seemed most appealing. (It's apparently a much thinner wrapper around Theano than things like [Keras](http://keras.io/) or [Blocks](https://github.com/mila-udem/blocks).)
 
 I quickly ran into issues with my high-dimensional, sparse feature matrix. Firstly, Lasagne and the other libraries don't seem to have much support for sparse inputs; consequently I ended up writing sparse version of Lasagne's `DenseLayer` and `DropoutLayer`, which are in `sparse_layers.py`. Secondly, as soon as I started trying to run a simple network based on these on my laptop's GPU (a GT750M), I got out-of-memory errors. It seems that Theano doesn't support sparse matrices on the GPU. What I did was to abandon the GPU and run everything on my CPU; but I wonder whether a random lower-dimensional projection (à la compressive sensing) of the sparse matrix would have allowed me to do fast, successful training using the GPU.
 
