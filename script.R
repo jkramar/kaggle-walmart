@@ -477,8 +477,6 @@ sample(validIndices[TripTypes[validIndices]=="39"],5,prob=(valid.fit[,"36"]*-log
 # some samples of losing on predicting 9 with truth 5
 # 82915 95008 82235 89233 81114
 
-# what could go better? transf'd svm? transf'd NB? kknn/fnn::knn? gbm? adabag? nn? randomForest/randomForestSRC/ranger? 
-# xgboost?
 test.Upcs = with(test[,.N,by=.(VisitNumber,Upc)],dummify(Upc,N,VisitNumber))
 test.Finelines = with(test[,.N,by=.(VisitNumber,FinelineNumber)],dummify(FinelineNumber,N,VisitNumber))
 test.Departments = with(test[,.N,by=.(VisitNumber,DepartmentDescription)],dummify(DepartmentDescription,N,VisitNumber))
@@ -535,17 +533,6 @@ colnames(test.fit)<-paste("TripType",colnames(test.fit),sep="_")
 write.csv(data.frame(VisitNumber=test.VisitNumber,test.fit*0.99996,TripType_14=0.00004),file="submission.csv",row.names=FALSE)
 
 
-# with all covars and N=1500, train:-1.16 and valid:-1.87.
-# now removing Finelines...
-
-
-
-
-glm.fit(as.matrix(cbind(Upcs,Finelines,Departments,Weekdays)),TripTypes==999,family="binomial")
-
-train[Upc%in%topUpc,.(VisitNumber,Upc=factor(Upc))][,as.list(table(Upc)),by=VisitNumber]
-
-train[,.(VisitNumber,Upc=factor(ifelse(Upc%in%topUpc,Upc,NA),exclude=NULL),ScanCount)][,data.table(cbind(VisitNumber,t(head(t(model.matrix(~Upc-1)),-1))))][,lapply(.SD,sum),by=VisitNumber]
 
 
 
@@ -564,129 +551,3 @@ train[,.(VisitNumber,Upc=factor(ifelse(Upc%in%topUpc,Upc,NA),exclude=NULL),ScanC
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-train[, VisitNumber := c(factor(VisitNumber))]
-setkey(train, VisitNumber)
-train[, FinelineNumber := factor(ifelse(is.na(FinelineNumber), -1, FinelineNumber))]
-train[, DeptFine := factor(paste(DepartmentDescription, FinelineNumber))]
-train[, Upc := factor(ifelse(is.na(Upc),-1,Upc))]
-cvset=train[VisitNumber>75000]
-train=train[VisitNumber<=75000]
-#test[, Upc := ifelse(is.na(Upc),-1,Upc)]
-#Upc.levels = levels(factor(c(train$Upc, test$Upc)))
-#train[, Upc := factor(Upc, levels=Upc.levels)]
-#test[, Upc := factor(Upc, levels=Upc.levels)]
-setkey(test, VisitNumber)
-test[, VisitNumber := c(factor(VisitNumber))]
-test[, FinelineNumber := factor(ifelse(is.na(FinelineNumber), -1, FinelineNumber), levels=levels(train$FinelineNumber))]
-ResortDtm <- function(working.dtm) {
-  # sorts a sparse matrix in triplet format (i,j,v) first by i, then by j.
-  # Args:
-  #   working.dtm: a sparse matrix in i,j,v format using $i $j and $v respectively. Any other variables that may exist in the sparse matrix are not operated on, and will be returned as-is.
-  # Returns:
-  #   A sparse matrix sorted by i, then by j.
-  working.df <- data.frame(i = working.dtm$i, j = working.dtm$j, v = working.dtm$v)  # create a data frame comprised of i,j,v values from the sparse matrix passed in.
-  working.df <- working.df[order(working.df$i, working.df$j), ] # sort the data frame first by i, then by j.
-  working.dtm$i <- working.df$i  # reassign the sparse matrix' i values with the i values from the sorted data frame.
-  working.dtm$j <- working.df$j  # ditto for j values.
-  working.dtm$v <- working.df$v  # ditto for v values.
-  return(working.dtm) # pass back the (now sorted) data frame.
-}  # end function
-library(slam)
-by.dept = train[,.(N=.N,Count=sum(pmax(0,ScanCount)),Antis=sum(ScanCount==-1)),by=.(VisitNumber,DepartmentDescription)]
-by.fine = train[,.(N=.N,Count=sum(pmax(0,ScanCount)),Antis=sum(ScanCount==-1)),by=.(VisitNumber,FinelineNumber)]
-by.dept.fine = train[,.(N=.N,Count=sum(pmax(0,ScanCount)),Antis=sum(ScanCount==-1)),by=.(VisitNumber,DeptFine)]
-by.upc = train[,.(N=.N,Count=sum(pmax(0,ScanCount)),Antis=sum(ScanCount==-1)),by=.(VisitNumber,Upc)]
-#triplicator = expression(train[,.(YY=Y,by=.(VisitNumber,X))][,simple_triplet_matrix(c(VisitNumber),c(X),YY,dimnames=.(levels(VisitNumber),levels(X)))])
-
-
-N.by.dept = as.DocumentTermMatrix(weighting=weightTfIdf,
-                                  by.dept[,simple_triplet_matrix(c(VisitNumber),c(DepartmentDescription),N,dimnames=.(levels(VisitNumber),levels(DepartmentDescription)))])
-Count.by.dept = as.DocumentTermMatrix(weighting=weightTfIdf,
-                                      by.dept[,simple_triplet_matrix(c(VisitNumber),c(DepartmentDescription),Count,dimnames=.(levels(VisitNumber),levels(DepartmentDescription)))])
-Antis.by.dept = as.DocumentTermMatrix(weighting=weightTfIdf,
-                                      by.dept[,simple_triplet_matrix(c(VisitNumber),c(DepartmentDescription),Antis,dimnames=.(levels(VisitNumber),levels(DepartmentDescription)))])
-N.by.dept.fine = as.DocumentTermMatrix(weighting=weightTfIdf,
-                                       by.dept.fine[,simple_triplet_matrix(c(VisitNumber),c(DeptFine),N)])
-Count.by.dept.fine = as.DocumentTermMatrix(weighting=weightTfIdf,
-                                           by.dept.fine[,simple_triplet_matrix(c(VisitNumber),c(DeptFine),Count)])
-Antis.by.dept.fine = as.DocumentTermMatrix(weighting=weightTfIdf,
-                                           by.dept.fine[,simple_triplet_matrix(c(VisitNumber),c(DeptFine),Antis)])
-N.by.upc = as.DocumentTermMatrix(weighting=weightTfIdf,
-                                 by.upc[,sparseMatrix(c(VisitNumber),c(Upc),x=N)])
-Count.by.upc = as.DocumentTermMatrix(weighting=weightTfIdf,
-                                     by.upc[,simple_triplet_matrix(c(VisitNumber),c(Upc),Count)])
-Antis.by.upc = as.DocumentTermMatrix(weighting=weightTfIdf,
-                                     by.upc[,simple_triplet_matrix(c(VisitNumber),c(Upc),Antis)])
-
-library(tm)
-
-#train[,keep.train:=rbinom(1,1,.6),by=VisitNumber]
-#valid=train[!keep.train]
-#train=train[!!keep.train]
-library(ranger)
-library(RTextTools)
-
-m=with(train[, .N, by = list(VisitNumber, DepartmentDescription)],
-       ResortDtm(as.DocumentTermMatrix(simple_triplet_matrix(
-         c(VisitNumber), c(DepartmentDescription), N, dimnames = list(levels(VisitNumber), levels(DepartmentDescription))))
-         mm=ResortDtm(as.DocumentTermMatrix(m,weighting = weightTfIdf))
-         # Weekday, UPC Number, ScanCount, FinelineNumber
-         
-         # weekdaymatrix = as(train$Weekday,"sparseMatrix")
-         
-         mm.dims=dimnames(mm)
-         mm=as.matrix.csr(as.matrix(mm))
-         dimnames(mm)=mm.dims
-         make.csr = function(m) {
-           dims = dimnames(m)
-           m = as.matrix.csr(as.matrix(m))
-           if(is.list(dims)) dimnames(m)=dims
-           m
-         }
-         # do not pass create_container a DocumentTermMatrix! it will eat you!!
-         c=create_container(mm,
-                            train[, TripType[1], by = VisitNumber]$V1,
-                            trainSize = 1:50000, testSize=50001:95674, virgin=FALSE)
-         cross_validate
-         
-         t = train_model(c,"BOOSTING")
-         # resps=classify_models(c,ts)
-         a = create_analytics(c,classify_model(c,t))
-         1/mean(1/a@algorithm_summary$LOGITBOOST_FSCORE,na.rm=T)
-         
-         pred.goodness = function(preds, ys) {
-           k=length(levels(preds))
-           t=table(preds, ys)
-           sum((log(t+k^-2)-log(rowSums(t)+k^-1))*(t+k^-2))/(sum(t)+1)
-         }
-         fit.dir = function(ns) {
-           uniroot(function(x) {
-             a=(1/x)-1
-             mean(digamma(ns+a))+digamma(a*length(ns))-digamma(a)-digamma(a*length(ns)+sum(ns))
-           }, c(1e-6,1-1e-6))
-         }
-         plot.dir.score = function(ns,lim=1) {
-           plot(function(a)mean(digamma(ns+a))+digamma(a*length(ns))-digamma(a), c(0,lim))
-         }
-         ts=train_models(c,c("SVM","MAXENT","SLDA","BOOSTING","BAGGING","RF","NNET"))
-         
-         cs=classify_models(c,ts)
-         a=create_analytics(c,cs)
-         
-         # in the result with 1000, nnet sucked, slda not very helpful, the others reasonable; logitboost seems strongest.
-         # can probably tune more
